@@ -31,8 +31,8 @@ impl Entry {
         let until = time(&cap, "until_h", "until_m")?;
         let project = cap.name("project").or(cap.name("quoted_project"))?;
         (from < until).then(|| Entry {
-            from: chrono::NaiveDateTime::new(date.clone(), from),
-            until: chrono::NaiveDateTime::new(date.clone(), until),
+            from: chrono::NaiveDateTime::new(*date, from),
+            until: chrono::NaiveDateTime::new(*date, until),
             project: project.as_str().into(),
             notes: cap.name("notes").map(|m| m.as_str().into()),
         })
@@ -102,7 +102,7 @@ mod tests {
 
     fn datetime(h: u32, m: u32) -> chrono::NaiveDateTime {
         let time = chrono::NaiveTime::from_hms_opt(h, m, 0).unwrap();
-        chrono::NaiveDateTime::new(DATE.clone(), time)
+        chrono::NaiveDateTime::new(*DATE, time)
     }
 
     #[test]

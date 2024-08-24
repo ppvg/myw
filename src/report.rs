@@ -2,8 +2,9 @@ use crate::timelog;
 use indexmap::map::IndexMap;
 
 pub enum Fill {
-    Sparse,
     Padded,
+    #[allow(dead_code)]
+    Sparse,
 }
 
 pub fn by_date(log: &timelog::Log, fill: Fill) -> Vec<(chrono::NaiveDate, chrono::TimeDelta)> {
@@ -13,7 +14,7 @@ pub fn by_date(log: &timelog::Log, fill: Fill) -> Vec<(chrono::NaiveDate, chrono
     }
     let mut map: IndexMap<chrono::NaiveDate, chrono::TimeDelta> = IndexMap::new();
     for entry in entries {
-        map.entry(entry.from.date().clone())
+        map.entry(entry.from.date())
             .and_modify(|d| *d += entry.duration())
             .or_insert(entry.duration());
     }
@@ -22,7 +23,7 @@ pub fn by_date(log: &timelog::Log, fill: Fill) -> Vec<(chrono::NaiveDate, chrono
         let start = map.first().unwrap().0;
         let end = map.last().unwrap().0;
         for date in DateRange(*start, *end) {
-            if let None = map.get(&date) {
+            if map.get(&date).is_none() {
                 map.insert(date, chrono::TimeDelta::zero());
             }
         }
@@ -46,8 +47,10 @@ pub fn by_project(log: &timelog::Log) -> Vec<(String, chrono::TimeDelta)> {
     map.drain(..).collect::<Vec<_>>()
 }
 
-pub fn sum<T>(items: &Vec<(T, chrono::TimeDelta)>) -> chrono::TimeDelta {
-    items.iter().fold(chrono::TimeDelta::zero(), |sum, val| sum + val.1)
+pub fn sum<T>(items: &[(T, chrono::TimeDelta)]) -> chrono::TimeDelta {
+    items
+        .iter()
+        .fold(chrono::TimeDelta::zero(), |sum, val| sum + val.1)
 }
 
 struct DateRange(chrono::NaiveDate, chrono::NaiveDate);
@@ -90,7 +93,7 @@ mod tests {
             * 11-12 ABC
         "});
         let report: Vec<_> = by_date(&list, Fill::Sparse);
-        let expected = vec![(date(2024, 02, 13), chrono::TimeDelta::hours(3))];
+        let expected = vec![(date(2024, 2, 13), chrono::TimeDelta::hours(3))];
         assert_eq!(expected, report);
     }
 
@@ -107,8 +110,8 @@ mod tests {
         "});
         let report: Vec<_> = by_date(&list, Fill::Sparse);
         let expected = vec![
-            (date(2024, 02, 13), chrono::TimeDelta::hours(3)),
-            (date(2024, 02, 14), chrono::TimeDelta::hours(2)),
+            (date(2024, 2, 13), chrono::TimeDelta::hours(3)),
+            (date(2024, 2, 14), chrono::TimeDelta::hours(2)),
         ];
         assert_eq!(expected, report);
     }
@@ -126,8 +129,8 @@ mod tests {
         "});
         let report: Vec<_> = by_date(&list, Fill::Sparse);
         let expected = vec![
-            (date(2024, 02, 13), chrono::TimeDelta::hours(3)),
-            (date(2024, 02, 17), chrono::TimeDelta::hours(2)),
+            (date(2024, 2, 13), chrono::TimeDelta::hours(3)),
+            (date(2024, 2, 17), chrono::TimeDelta::hours(2)),
         ];
         assert_eq!(expected, report);
     }
@@ -145,11 +148,11 @@ mod tests {
         "});
         let report: Vec<_> = by_date(&list, Fill::Padded);
         let expected = vec![
-            (date(2024, 02, 13), chrono::TimeDelta::hours(3)),
-            (date(2024, 02, 14), chrono::TimeDelta::zero()),
-            (date(2024, 02, 15), chrono::TimeDelta::zero()),
-            (date(2024, 02, 16), chrono::TimeDelta::zero()),
-            (date(2024, 02, 17), chrono::TimeDelta::hours(2)),
+            (date(2024, 2, 13), chrono::TimeDelta::hours(3)),
+            (date(2024, 2, 14), chrono::TimeDelta::zero()),
+            (date(2024, 2, 15), chrono::TimeDelta::zero()),
+            (date(2024, 2, 16), chrono::TimeDelta::zero()),
+            (date(2024, 2, 17), chrono::TimeDelta::hours(2)),
         ];
         assert_eq!(expected, report);
     }
@@ -157,15 +160,15 @@ mod tests {
     #[test]
     fn by_date_unsorted_sparse() {
         let list = timelog::Log(vec![
-            timelog::Entry::parse("10-11 ABC", &date(2024, 02, 17)).unwrap(),
-            timelog::Entry::parse("10-12 ABC", &date(2024, 02, 13)).unwrap(),
-            timelog::Entry::parse("10-13 ABC", &date(2024, 02, 14)).unwrap(),
+            timelog::Entry::parse("10-11 ABC", &date(2024, 2, 17)).unwrap(),
+            timelog::Entry::parse("10-12 ABC", &date(2024, 2, 13)).unwrap(),
+            timelog::Entry::parse("10-13 ABC", &date(2024, 2, 14)).unwrap(),
         ]);
         let report: Vec<_> = by_date(&list, Fill::Sparse);
         let expected = vec![
-            (date(2024, 02, 13), chrono::TimeDelta::hours(2)),
-            (date(2024, 02, 14), chrono::TimeDelta::hours(3)),
-            (date(2024, 02, 17), chrono::TimeDelta::hours(1)),
+            (date(2024, 2, 13), chrono::TimeDelta::hours(2)),
+            (date(2024, 2, 14), chrono::TimeDelta::hours(3)),
+            (date(2024, 2, 17), chrono::TimeDelta::hours(1)),
         ];
         assert_eq!(expected, report);
     }
@@ -173,17 +176,17 @@ mod tests {
     #[test]
     fn by_date_unsorted_padded() {
         let list = timelog::Log(vec![
-            timelog::Entry::parse("10-11 ABC", &date(2024, 02, 17)).unwrap(),
-            timelog::Entry::parse("10-12 ABC", &date(2024, 02, 13)).unwrap(),
-            timelog::Entry::parse("10-13 ABC", &date(2024, 02, 14)).unwrap(),
+            timelog::Entry::parse("10-11 ABC", &date(2024, 2, 17)).unwrap(),
+            timelog::Entry::parse("10-12 ABC", &date(2024, 2, 13)).unwrap(),
+            timelog::Entry::parse("10-13 ABC", &date(2024, 2, 14)).unwrap(),
         ]);
         let report: Vec<_> = by_date(&list, Fill::Padded);
         let expected = vec![
-            (date(2024, 02, 13), chrono::TimeDelta::hours(2)),
-            (date(2024, 02, 14), chrono::TimeDelta::hours(3)),
-            (date(2024, 02, 15), chrono::TimeDelta::zero()),
-            (date(2024, 02, 16), chrono::TimeDelta::zero()),
-            (date(2024, 02, 17), chrono::TimeDelta::hours(1)),
+            (date(2024, 2, 13), chrono::TimeDelta::hours(2)),
+            (date(2024, 2, 14), chrono::TimeDelta::hours(3)),
+            (date(2024, 2, 15), chrono::TimeDelta::zero()),
+            (date(2024, 2, 16), chrono::TimeDelta::zero()),
+            (date(2024, 2, 17), chrono::TimeDelta::hours(1)),
         ];
         assert_eq!(expected, report);
     }

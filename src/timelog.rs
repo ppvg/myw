@@ -2,7 +2,6 @@ mod entry;
 
 pub use entry::Entry;
 use lazy_static::lazy_static;
-use markdown;
 use markdown::mdast;
 use regex::Regex;
 
