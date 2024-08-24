@@ -1,6 +1,7 @@
 mod commands;
 mod report;
 mod timelog;
+mod utils;
 
 use std::error::Error;
 

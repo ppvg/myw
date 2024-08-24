@@ -1,5 +1,5 @@
 use crate::timelog;
-use indexmap::map::IndexMap;
+use crate::utils;
 
 pub enum Fill {
     Padded,
@@ -9,63 +9,25 @@ pub enum Fill {
 
 pub fn by_date(log: &timelog::Log, fill: Fill) -> Vec<(chrono::NaiveDate, chrono::TimeDelta)> {
     let mut logs = log.by_date();
-    if logs.is_empty() {
-        return vec![];
-    }
     if let Fill::Padded = fill {
-        pad(&mut logs, || timelog::Log(vec![]));
+        utils::pad_dates(&mut logs, None);
     }
-    logs.drain(..).map(to_duration).collect::<Vec<_>>()
+    logs.drain(..)
+        .map(|(date, log)| (date, log.sum_duration()))
+        .collect::<Vec<_>>()
 }
 
 pub fn by_project(log: &timelog::Log) -> Vec<(String, chrono::TimeDelta)> {
     let mut logs = log.by_project();
-    if logs.is_empty() {
-        return vec![];
-    }
-    logs.drain(..).map(to_duration).collect::<Vec<_>>()
+    logs.drain(..)
+        .map(|(project, log)| (project, log.sum_duration()))
+        .collect::<Vec<_>>()
 }
 
 pub fn sum<T>(items: &[(T, chrono::TimeDelta)]) -> chrono::TimeDelta {
     items
         .iter()
         .fold(chrono::TimeDelta::zero(), |sum, val| sum + val.1)
-}
-
-fn to_duration<T>((key, log): (T, timelog::Log)) -> (T, chrono::TimeDelta) {
-    (
-        key,
-        log.0
-            .into_iter()
-            .fold(chrono::TimeDelta::zero(), |sum, entry| {
-                sum + entry.duration()
-            }),
-    )
-}
-
-fn pad<T>(map: &mut IndexMap<chrono::NaiveDate, T>, default: fn() -> T) {
-    let start = map.first().unwrap().0;
-    let end = map.last().unwrap().0;
-    for date in DateRange(*start, *end) {
-        if map.get(&date).is_none() {
-            map.insert(date, default());
-        }
-    }
-    map.sort_keys();
-}
-
-struct DateRange(chrono::NaiveDate, chrono::NaiveDate);
-
-impl Iterator for DateRange {
-    type Item = chrono::NaiveDate;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.0 <= self.1 {
-            let next = self.0.checked_add_days(chrono::Days::new(1))?;
-            Some(std::mem::replace(&mut self.0, next))
-        } else {
-            None
-        }
-    }
 }
 
 #[cfg(test)]

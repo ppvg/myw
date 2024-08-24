@@ -16,9 +16,7 @@ pub struct Log(pub Vec<Entry>);
 impl Log {
     pub fn parse(input: &str) -> Self {
         let ast = parse_md(input);
-        let Some(nodes) = ast.children() else {
-            return Self(vec![]);
-        };
+        let nodes = ast.children().unwrap();
         let mut date: Option<chrono::NaiveDate> = None;
         let mut entries: Vec<Entry> = vec![];
         for node in nodes.iter() {
@@ -73,6 +71,14 @@ impl Log {
                 .push(entry.clone())
         }
         map
+    }
+
+    pub fn sum_duration(self) -> chrono::TimeDelta {
+        self.0
+            .into_iter()
+            .fold(chrono::TimeDelta::zero(), |sum, entry| {
+                sum + entry.duration()
+            })
     }
 }
 
@@ -194,5 +200,29 @@ mod tests {
             ("DEF".to_owned(), Log(vec![e2, e5])),
         ]);
         assert_eq!(expected, report);
+    }
+
+    #[test]
+    fn sum_duration_empty() {
+        let log = Log::parse("");
+        let duration = log.sum_duration();
+        let expected = chrono::TimeDelta::zero();
+        assert_eq!(expected, duration);
+    }
+
+    #[test]
+    fn sum_duration_entries() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            * 9-10 ABC
+            * 10-11 DEF
+            * 11-12 ABC
+            ## 2024-02-14
+            * 9-10 ABC
+            * 10-11 DEF
+        "});
+        let duration = log.sum_duration();
+        let expected = chrono::TimeDelta::hours(5);
+        assert_eq!(expected, duration);
     }
 }
