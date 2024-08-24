@@ -16,7 +16,7 @@ lazy_static::lazy_static! {
     .unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Entry {
     pub from: chrono::NaiveDateTime,
     pub until: chrono::NaiveDateTime,

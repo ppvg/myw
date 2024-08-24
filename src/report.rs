@@ -8,49 +8,50 @@ pub enum Fill {
 }
 
 pub fn by_date(log: &timelog::Log, fill: Fill) -> Vec<(chrono::NaiveDate, chrono::TimeDelta)> {
-    let timelog::Log(entries) = log;
-    if entries.is_empty() {
+    let mut logs = log.by_date();
+    if logs.is_empty() {
         return vec![];
     }
-    let mut map: IndexMap<chrono::NaiveDate, chrono::TimeDelta> = IndexMap::new();
-    for entry in entries {
-        map.entry(entry.from.date())
-            .and_modify(|d| *d += entry.duration())
-            .or_insert(entry.duration());
-    }
-    map.sort_keys();
     if let Fill::Padded = fill {
-        let start = map.first().unwrap().0;
-        let end = map.last().unwrap().0;
-        for date in DateRange(*start, *end) {
-            if map.get(&date).is_none() {
-                map.insert(date, chrono::TimeDelta::zero());
-            }
-        }
-        map.sort_keys();
+        pad(&mut logs, || timelog::Log(vec![]));
     }
-    map.drain(..).collect::<Vec<_>>()
+    logs.drain(..).map(to_duration).collect::<Vec<_>>()
 }
 
 pub fn by_project(log: &timelog::Log) -> Vec<(String, chrono::TimeDelta)> {
-    let timelog::Log(entries) = log;
-    if entries.is_empty() {
+    let mut logs = log.by_project();
+    if logs.is_empty() {
         return vec![];
     }
-    let mut map: IndexMap<String, chrono::TimeDelta> = IndexMap::new();
-    for entry in entries {
-        map.entry(entry.project.clone())
-            .and_modify(|d| *d += entry.duration())
-            .or_insert(entry.duration());
-    }
-    map.sort_keys();
-    map.drain(..).collect::<Vec<_>>()
+    logs.drain(..).map(to_duration).collect::<Vec<_>>()
 }
 
 pub fn sum<T>(items: &[(T, chrono::TimeDelta)]) -> chrono::TimeDelta {
     items
         .iter()
         .fold(chrono::TimeDelta::zero(), |sum, val| sum + val.1)
+}
+
+fn to_duration<T>((key, log): (T, timelog::Log)) -> (T, chrono::TimeDelta) {
+    (
+        key,
+        log.0
+            .into_iter()
+            .fold(chrono::TimeDelta::zero(), |sum, entry| {
+                sum + entry.duration()
+            }),
+    )
+}
+
+fn pad<T>(map: &mut IndexMap<chrono::NaiveDate, T>, default: fn() -> T) {
+    let start = map.first().unwrap().0;
+    let end = map.last().unwrap().0;
+    for date in DateRange(*start, *end) {
+        if map.get(&date).is_none() {
+            map.insert(date, default());
+        }
+    }
+    map.sort_keys();
 }
 
 struct DateRange(chrono::NaiveDate, chrono::NaiveDate);
@@ -158,40 +159,6 @@ mod tests {
     }
 
     #[test]
-    fn by_date_unsorted_sparse() {
-        let list = timelog::Log(vec![
-            timelog::Entry::parse("10-11 ABC", &date(2024, 2, 17)).unwrap(),
-            timelog::Entry::parse("10-12 ABC", &date(2024, 2, 13)).unwrap(),
-            timelog::Entry::parse("10-13 ABC", &date(2024, 2, 14)).unwrap(),
-        ]);
-        let report: Vec<_> = by_date(&list, Fill::Sparse);
-        let expected = vec![
-            (date(2024, 2, 13), chrono::TimeDelta::hours(2)),
-            (date(2024, 2, 14), chrono::TimeDelta::hours(3)),
-            (date(2024, 2, 17), chrono::TimeDelta::hours(1)),
-        ];
-        assert_eq!(expected, report);
-    }
-
-    #[test]
-    fn by_date_unsorted_padded() {
-        let list = timelog::Log(vec![
-            timelog::Entry::parse("10-11 ABC", &date(2024, 2, 17)).unwrap(),
-            timelog::Entry::parse("10-12 ABC", &date(2024, 2, 13)).unwrap(),
-            timelog::Entry::parse("10-13 ABC", &date(2024, 2, 14)).unwrap(),
-        ]);
-        let report: Vec<_> = by_date(&list, Fill::Padded);
-        let expected = vec![
-            (date(2024, 2, 13), chrono::TimeDelta::hours(2)),
-            (date(2024, 2, 14), chrono::TimeDelta::hours(3)),
-            (date(2024, 2, 15), chrono::TimeDelta::zero()),
-            (date(2024, 2, 16), chrono::TimeDelta::zero()),
-            (date(2024, 2, 17), chrono::TimeDelta::hours(1)),
-        ];
-        assert_eq!(expected, report);
-    }
-
-    #[test]
     fn by_project_empty() {
         let list = timelog::Log(vec![]);
         let report: Vec<_> = by_project(&list);
@@ -227,25 +194,6 @@ mod tests {
         let expected = vec![
             ("ABC".to_string(), chrono::TimeDelta::hours(2)),
             ("DEF".to_string(), chrono::TimeDelta::hours(1)),
-        ];
-        assert_eq!(expected, report);
-    }
-
-    #[test]
-    fn by_project_unsorted() {
-        let list = timelog::Log::parse(indoc::indoc! {"
-            ## 2024-02-13
-            * 9-10 DEF
-            * 10-11 ABC
-            ## 2024-02-14
-            * 9-10 GHI
-            * 10-11 ABC
-        "});
-        let report: Vec<_> = by_project(&list);
-        let expected = vec![
-            ("ABC".to_string(), chrono::TimeDelta::hours(2)),
-            ("DEF".to_string(), chrono::TimeDelta::hours(1)),
-            ("GHI".to_string(), chrono::TimeDelta::hours(1)),
         ];
         assert_eq!(expected, report);
     }
