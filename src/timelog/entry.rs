@@ -80,7 +80,15 @@ impl fmt::Display for Entry {
         let date = self.from.format("%Y-%m-%d");
         let from = self.from.format("%H:%M");
         let until = self.until.format("%H:%M");
-        write!(f, "{} | {} - {}: {}", date, from, until, self.project)
+        if let Some(notes) = &self.notes {
+            write!(
+                f,
+                "{} | {} - {}: {} - {}",
+                date, from, until, self.project, notes
+            )
+        } else {
+            write!(f, "{} | {} - {}: {}", date, from, until, self.project)
+        }
     }
 }
 
