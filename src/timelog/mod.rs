@@ -2,13 +2,11 @@ mod entry;
 
 pub use entry::Entry;
 use indexmap::map::IndexMap;
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 use markdown::mdast;
 use regex::Regex;
 
-lazy_static! {
-    static ref DATE_RE: Regex = Regex::new(r"\b\d{4}-\d{2}-\d{2}\b").unwrap();
-}
+static DATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d{4}-\d{2}-\d{2}\b").unwrap());
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Log(pub Vec<Entry>);

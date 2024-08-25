@@ -2,13 +2,13 @@
 name = "myw"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.80"
 
 [dependencies]
 chrono = "0.4.34"
 clap = { version = "4.5.0", features = ["cargo"] }
 colored = "2.1.0"
 indexmap = "2.2.3"
-lazy_static = "1.4.0"
 markdown = "1.0.0-alpha.16"
 regex = "1.10.3"
 

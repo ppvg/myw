@@ -1,7 +1,7 @@
-use std::{cmp, fmt};
+use std::{cmp, fmt, sync::LazyLock};
 
-lazy_static::lazy_static! {
-    static ref ENTRY_RE: regex::Regex = regex::Regex::new(
+static ENTRY_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
         r#"(?x)^\s*
         (?<from_h>[012]?\d)(?::?(?<from_m>\d{2}))?
         (?:\s*-\s*|\s+)
@@ -11,10 +11,10 @@ lazy_static::lazy_static! {
             (?<project>\w{3,}+)
             |(?:"(?<quoted_project>.+?)")
         )
-        \s*(?<notes>.+?)?\s*$"#
+        \s*(?<notes>.+?)?\s*$"#,
     )
-    .unwrap();
-}
+    .unwrap()
+});
 
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -96,9 +96,8 @@ impl fmt::Display for Entry {
 mod tests {
     use super::*;
 
-    lazy_static::lazy_static! {
-        static ref DATE: chrono::NaiveDate = chrono::NaiveDate::from_ymd_opt(2024, 2, 13).unwrap();
-    }
+    static DATE: LazyLock<chrono::NaiveDate> =
+        LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2024, 2, 13).unwrap());
 
     fn datetime(h: u32, m: u32) -> chrono::NaiveDateTime {
         let time = chrono::NaiveTime::from_hms_opt(h, m, 0).unwrap();
