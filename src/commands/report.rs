@@ -18,8 +18,9 @@ pub fn run(matches: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let file = matches.get_one::<PathBuf>("file").unwrap();
     let content = fs::read_to_string(file)?;
     let log = timelog::Log::parse(&content);
-    println!("{}", Report::by_date(&log, Fill::Padded).text());
-    println!("{}", Report::by_project(&log).text());
-    println!("{}", Report::total(&log).text());
+    let reports = Report::by_date_by_project(&log, Fill::Padded);
+    for report in reports {
+        println!("{}", report.text());
+    }
     Ok(())
 }

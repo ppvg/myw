@@ -19,6 +19,7 @@ pub struct Report {
 pub struct TextReport(Report);
 
 impl Report {
+    #[cfg(test)]
     pub fn by_date(log: &timelog::Log, fill: Fill) -> Self {
         let mut logs = log.by_date();
         if let Fill::Padded = fill {
@@ -35,6 +36,7 @@ impl Report {
         }
     }
 
+    #[cfg(test)]
     pub fn by_project(log: &timelog::Log) -> Self {
         let mut logs = log.by_project();
         Self {
@@ -48,12 +50,35 @@ impl Report {
         }
     }
 
+    #[cfg(test)]
     pub fn total(log: &timelog::Log) -> Self {
         Self {
             title: "Total".to_owned(),
             entries: None,
             total: Some(log.sum_duration()),
         }
+    }
+
+    pub fn by_date_by_project(log: &timelog::Log, fill: Fill) -> Vec<Self> {
+        let mut logs = log.by_date();
+        if let Fill::Padded = fill {
+            utils::pad_dates(&mut logs, None);
+        }
+        logs.drain(..)
+            .map(|(date, log)| {
+                let mut logs = log.by_project();
+                let total = log.sum_duration();
+                Self {
+                    title: date.to_string(),
+                    entries: Some(
+                        logs.drain(..)
+                            .map(|(project, log)| (project, log.sum_duration()))
+                            .collect::<Vec<_>>(),
+                    ),
+                    total: Some(total),
+                }
+            })
+            .collect::<Vec<_>>()
     }
 
     pub fn text(self) -> TextReport {
@@ -301,6 +326,76 @@ mod tests {
                 entries: None,
                 total: Some(chrono::TimeDelta::hours(3))
             },
+            report
+        );
+    }
+
+    #[test]
+    fn by_date_by_project_sparse() {
+        let log = timelog::Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            * 9-10 ABC
+            * 10-11 DEF
+            ## 2024-02-16
+            * 9-10 ABC
+        "});
+        let report = Report::by_date_by_project(&log, Fill::Sparse);
+        assert_eq!(
+            vec![
+                Report {
+                    title: "2024-02-13".to_owned(),
+                    entries: Some(vec![
+                        ("ABC".to_string(), chrono::TimeDelta::hours(1)),
+                        ("DEF".to_string(), chrono::TimeDelta::hours(1)),
+                    ]),
+                    total: Some(chrono::TimeDelta::hours(2))
+                },
+                Report {
+                    title: "2024-02-16".to_owned(),
+                    entries: Some(vec![("ABC".to_string(), chrono::TimeDelta::hours(1)),]),
+                    total: Some(chrono::TimeDelta::hours(1))
+                }
+            ],
+            report
+        );
+    }
+
+    #[test]
+    fn by_date_by_project_padded() {
+        let log = timelog::Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            * 9-10 ABC
+            * 10-11 DEF
+            ## 2024-02-16
+            * 9-10 ABC
+        "});
+        let report = Report::by_date_by_project(&log, Fill::Padded);
+        assert_eq!(
+            vec![
+                Report {
+                    title: "2024-02-13".to_owned(),
+                    entries: Some(vec![
+                        ("ABC".to_string(), chrono::TimeDelta::hours(1)),
+                        ("DEF".to_string(), chrono::TimeDelta::hours(1)),
+                    ]),
+                    total: Some(chrono::TimeDelta::hours(2))
+                },
+                Report {
+                    title: "2024-02-14".to_owned(),
+                    entries: Some(vec![]),
+                    total: Some(chrono::TimeDelta::hours(0))
+                },
+                Report {
+                    title: "2024-02-15".to_owned(),
+                    entries: Some(vec![]),
+                    total: Some(chrono::TimeDelta::hours(0))
+                },
+                Report {
+                    title: "2024-02-16".to_owned(),
+                    entries: Some(vec![("ABC".to_string(), chrono::TimeDelta::hours(1)),]),
+                    total: Some(chrono::TimeDelta::hours(1))
+                }
+            ],
             report
         );
     }

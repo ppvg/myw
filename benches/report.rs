@@ -16,7 +16,7 @@ fn bench_report_by_date_short(bencher: divan::Bencher) {
     let log = Log::parse(&content);
 
     bencher.bench_local(move || {
-        Report::by_date(&log, Fill::Padded);
+        Report::by_date_by_project(&log, Fill::Padded);
     });
 }
 
@@ -28,7 +28,7 @@ fn bench_report_by_date_long(bencher: divan::Bencher) {
     let log = Log::parse(&content);
 
     bencher.bench_local(move || {
-        Report::by_date(&log, Fill::Padded);
+        Report::by_date_by_project(&log, Fill::Padded);
     });
 }
 
@@ -40,6 +40,6 @@ fn bench_report_by_date_scrambled(bencher: divan::Bencher) {
     let log = Log::parse(&content);
 
     bencher.bench_local(move || {
-        Report::by_date(&log, Fill::Padded);
+        Report::by_date_by_project(&log, Fill::Padded);
     });
 }
