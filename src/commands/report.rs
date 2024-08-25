@@ -22,5 +22,6 @@ pub fn run(matches: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     for report in reports {
         println!("{}", report.text());
     }
+    println!("{}", Report::total(&log).text());
     Ok(())
 }

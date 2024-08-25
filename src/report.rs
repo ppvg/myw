@@ -50,7 +50,6 @@ impl Report {
         }
     }
 
-    #[cfg(test)]
     pub fn total(log: &timelog::Log) -> Self {
         Self {
             title: "Total".to_owned(),
