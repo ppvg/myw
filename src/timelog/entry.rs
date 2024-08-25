@@ -29,7 +29,7 @@ impl Entry {
         let cap = ENTRY_RE.captures(s)?;
         let from = time(&cap, "from_h", "from_m")?;
         let until = time(&cap, "until_h", "until_m")?;
-        let project = cap.name("project").or(cap.name("quoted_project"))?;
+        let project = cap.name("project").or(cap.name("quoted_project")).unwrap();
         (from < until).then(|| Entry {
             from: chrono::NaiveDateTime::new(*date, from),
             until: chrono::NaiveDateTime::new(*date, until),
@@ -43,13 +43,13 @@ impl Entry {
 }
 
 fn time(cap: &regex::Captures, h: &str, m: &str) -> Option<chrono::NaiveTime> {
-    let h = time_part(cap.name(h))?;
-    let m = time_part(cap.name(m))?;
+    let h = time_part(cap.name(h));
+    let m = time_part(cap.name(m));
     chrono::NaiveTime::from_hms_opt(h, m, 0)
 }
 
-fn time_part(s: Option<regex::Match>) -> Option<u32> {
-    s.map_or(Some(0), |s| s.as_str().parse::<u32>().ok())
+fn time_part(s: Option<regex::Match>) -> u32 {
+    s.map_or(0, |s| s.as_str().parse::<u32>().unwrap_or(0))
 }
 
 impl cmp::PartialEq for Entry {
@@ -196,14 +196,40 @@ mod tests {
     }
 
     #[test]
-    fn invalid_time() {
+    fn quoted_project_short() {
+        let result = Entry::parse("9 10 \"A\"", &DATE);
+        assert_eq!(
+            Some(Entry {
+                from: datetime(9, 0),
+                until: datetime(10, 0),
+                project: "A".into(),
+                notes: None
+            }),
+            result
+        );
+    }
+
+    #[test]
+    fn invalid_from_time() {
+        let result = Entry::parse("9:99 - 11:00: ABC", &DATE);
+        assert_eq!(None, result);
+    }
+
+    #[test]
+    fn invalid_until_time() {
         let result = Entry::parse("9:00 - 24:15: ABC", &DATE);
         assert_eq!(None, result);
     }
 
     #[test]
-    fn no_project() {
-        let result = Entry::parse("9:00 - 10:45", &DATE);
+    fn hours_exceeding_u32_max() {
+        let result = Entry::parse("4294967296 - 4294967297: ABC", &DATE);
+        assert_eq!(None, result);
+    }
+
+    #[test]
+    fn minutes_exceeding_u32_max() {
+        let result = Entry::parse("9:4294967296 - 10:4294967296: ABC", &DATE);
         assert_eq!(None, result);
     }
 
@@ -214,8 +240,20 @@ mod tests {
     }
 
     #[test]
+    fn no_project() {
+        let result = Entry::parse("9:00 - 10:45", &DATE);
+        assert_eq!(None, result);
+    }
+
+    #[test]
     fn project_name_too_short() {
         let result = Entry::parse("9-10:AB", &DATE);
+        assert_eq!(None, result);
+    }
+
+    #[test]
+    fn quoted_project_empty() {
+        let result = Entry::parse("9-10:\"\"", &DATE);
         assert_eq!(None, result);
     }
 
@@ -254,5 +292,19 @@ mod tests {
         let a = Entry::parse("9-10:ABC", &DATE).unwrap();
         let b = Entry::parse("9-10:ABC notes are not taken into account", &DATE).unwrap();
         assert!(a == b);
+    }
+
+    #[test]
+    fn display() {
+        let a = Entry::parse("9-10:ABC", &DATE).unwrap();
+        let result = a.to_string();
+        assert_eq!("2024-02-13 | 09:00 - 10:00: ABC", result);
+    }
+
+    #[test]
+    fn display_with_notes() {
+        let a = Entry::parse("9-10:ABC some notes", &DATE).unwrap();
+        let result = a.to_string();
+        assert_eq!("2024-02-13 | 09:00 - 10:00: ABC - some notes", result);
     }
 }
