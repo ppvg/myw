@@ -2,9 +2,9 @@ mod entry;
 
 pub use entry::Entry;
 use indexmap::map::IndexMap;
-use std::sync::LazyLock;
 use markdown::mdast;
 use regex::Regex;
+use std::sync::LazyLock;
 
 static DATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d{4}-\d{2}-\d{2}\b").unwrap());
 
@@ -71,12 +71,10 @@ impl Log {
         map
     }
 
-    pub fn sum_duration(self) -> chrono::TimeDelta {
-        self.0
-            .into_iter()
-            .fold(chrono::TimeDelta::zero(), |sum, entry| {
-                sum + entry.duration()
-            })
+    pub fn sum_duration(&self) -> chrono::TimeDelta {
+        self.0.iter().fold(chrono::TimeDelta::zero(), |sum, entry| {
+            sum + entry.duration()
+        })
     }
 }
 

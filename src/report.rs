@@ -1,5 +1,7 @@
 use crate::timelog;
 use crate::utils;
+use colored::Colorize;
+use std::fmt;
 
 pub enum Fill {
     Padded,
@@ -7,27 +9,83 @@ pub enum Fill {
     Sparse,
 }
 
-pub fn by_date(log: &timelog::Log, fill: Fill) -> Vec<(chrono::NaiveDate, chrono::TimeDelta)> {
-    let mut logs = log.by_date();
-    if let Fill::Padded = fill {
-        utils::pad_dates(&mut logs, None);
+#[derive(Debug, PartialEq)]
+pub struct Report {
+    pub title: String,
+    pub entries: Option<Vec<(String, chrono::TimeDelta)>>,
+    pub total: Option<chrono::TimeDelta>,
+}
+
+pub struct TextReport(Report);
+
+impl Report {
+    pub fn by_date(log: &timelog::Log, fill: Fill) -> Self {
+        let mut logs = log.by_date();
+        if let Fill::Padded = fill {
+            utils::pad_dates(&mut logs, None);
+        }
+        Self {
+            title: "By date".to_owned(),
+            entries: Some(
+                logs.drain(..)
+                    .map(|(date, log)| (date.to_string(), log.sum_duration()))
+                    .collect::<Vec<_>>(),
+            ),
+            total: None,
+        }
     }
-    logs.drain(..)
-        .map(|(date, log)| (date, log.sum_duration()))
-        .collect::<Vec<_>>()
+
+    pub fn by_project(log: &timelog::Log) -> Self {
+        let mut logs = log.by_project();
+        Self {
+            title: "By project".to_owned(),
+            entries: Some(
+                logs.drain(..)
+                    .map(|(project, log)| (project, log.sum_duration()))
+                    .collect::<Vec<_>>(),
+            ),
+            total: None,
+        }
+    }
+
+    pub fn total(log: &timelog::Log) -> Self {
+        Self {
+            title: "Total".to_owned(),
+            entries: None,
+            total: Some(log.sum_duration()),
+        }
+    }
+
+    pub fn text(self) -> TextReport {
+        TextReport(self)
+    }
 }
 
-pub fn by_project(log: &timelog::Log) -> Vec<(String, chrono::TimeDelta)> {
-    let mut logs = log.by_project();
-    logs.drain(..)
-        .map(|(project, log)| (project, log.sum_duration()))
-        .collect::<Vec<_>>()
+impl fmt::Display for TextReport {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let report = &self.0;
+        let title = report.title.bold();
+        if let Some(total) = report.total {
+            let total = format_hours(&total);
+            writeln!(f, "{}: {}", title, total)?;
+        } else {
+            writeln!(f, "{}", report.title.bold())?;
+        }
+        if let Some(entries) = &report.entries {
+            for (name, hours) in entries {
+                let hours = format_hours(hours);
+                writeln!(f, "{}: {}", name, hours)?;
+            }
+        }
+        Ok(())
+    }
 }
 
-pub fn sum<T>(items: &[(T, chrono::TimeDelta)]) -> chrono::TimeDelta {
-    items
-        .iter()
-        .fold(chrono::TimeDelta::zero(), |sum, val| sum + val.1)
+fn format_hours(td: &chrono::TimeDelta) -> String {
+    format!(
+        "{}",
+        ((td.num_minutes() as f32) / 60.0 * 100.0).round() / 100.0
+    )
 }
 
 #[cfg(test)]
@@ -40,29 +98,52 @@ mod tests {
 
     #[test]
     fn by_date_empty() {
-        let list = timelog::Log(vec![]);
-        let report: Vec<_> = by_date(&list, Fill::Sparse);
-        assert!(report.is_empty());
-        let report: Vec<_> = by_date(&list, Fill::Padded);
-        assert!(report.is_empty());
+        let log = timelog::Log(vec![]);
+        let report = Report::by_date(&log, Fill::Sparse);
+        assert_eq!(
+            Report {
+                title: "By date".to_owned(),
+                entries: Some(vec![]),
+                total: None
+            },
+            report
+        );
+        let report = Report::by_date(&log, Fill::Padded);
+        assert_eq!(
+            Report {
+                title: "By date".to_owned(),
+                entries: Some(vec![]),
+                total: None
+            },
+            report
+        );
     }
 
     #[test]
     fn by_date_one_date() {
-        let list = timelog::Log::parse(indoc::indoc! {"
+        let log = timelog::Log::parse(indoc::indoc! {"
             ## 2024-02-13
             * 9-10 ABC
             * 10-11 DEF
             * 11-12 ABC
         "});
-        let report: Vec<_> = by_date(&list, Fill::Sparse);
-        let expected = vec![(date(2024, 2, 13), chrono::TimeDelta::hours(3))];
-        assert_eq!(expected, report);
+        let report = Report::by_date(&log, Fill::Sparse);
+        assert_eq!(
+            Report {
+                title: "By date".to_owned(),
+                entries: Some(vec![(
+                    date(2024, 2, 13).to_string(),
+                    chrono::TimeDelta::hours(3)
+                )]),
+                total: None
+            },
+            report
+        );
     }
 
     #[test]
     fn by_date_multiple_dates() {
-        let list = timelog::Log::parse(indoc::indoc! {"
+        let log = timelog::Log::parse(indoc::indoc! {"
             ## 2024-02-13
             * 9-10 ABC
             * 10-11 DEF
@@ -71,17 +152,23 @@ mod tests {
             * 9-10 ABC
             * 10-11 DEF
         "});
-        let report: Vec<_> = by_date(&list, Fill::Sparse);
-        let expected = vec![
-            (date(2024, 2, 13), chrono::TimeDelta::hours(3)),
-            (date(2024, 2, 14), chrono::TimeDelta::hours(2)),
-        ];
-        assert_eq!(expected, report);
+        let report = Report::by_date(&log, Fill::Sparse);
+        assert_eq!(
+            Report {
+                title: "By date".to_owned(),
+                entries: Some(vec![
+                    (date(2024, 2, 13).to_string(), chrono::TimeDelta::hours(3)),
+                    (date(2024, 2, 14).to_string(), chrono::TimeDelta::hours(2)),
+                ]),
+                total: None
+            },
+            report
+        );
     }
 
     #[test]
     fn by_date_multiple_dates_sparse() {
-        let list = timelog::Log::parse(indoc::indoc! {"
+        let log = timelog::Log::parse(indoc::indoc! {"
             ## 2024-02-13
             * 9-10 ABC
             * 10-11 DEF
@@ -90,17 +177,23 @@ mod tests {
             * 9-10 ABC
             * 10-11 DEF
         "});
-        let report: Vec<_> = by_date(&list, Fill::Sparse);
-        let expected = vec![
-            (date(2024, 2, 13), chrono::TimeDelta::hours(3)),
-            (date(2024, 2, 17), chrono::TimeDelta::hours(2)),
-        ];
-        assert_eq!(expected, report);
+        let report = Report::by_date(&log, Fill::Sparse);
+        assert_eq!(
+            Report {
+                title: "By date".to_owned(),
+                entries: Some(vec![
+                    (date(2024, 2, 13).to_string(), chrono::TimeDelta::hours(3)),
+                    (date(2024, 2, 17).to_string(), chrono::TimeDelta::hours(2)),
+                ]),
+                total: None
+            },
+            report
+        );
     }
 
     #[test]
     fn by_date_multiple_dates_padded() {
-        let list = timelog::Log::parse(indoc::indoc! {"
+        let log = timelog::Log::parse(indoc::indoc! {"
             ## 2024-02-13
             * 9-10 ABC
             * 10-11 DEF
@@ -109,54 +202,172 @@ mod tests {
             * 9-10 ABC
             * 10-11 DEF
         "});
-        let report: Vec<_> = by_date(&list, Fill::Padded);
-        let expected = vec![
-            (date(2024, 2, 13), chrono::TimeDelta::hours(3)),
-            (date(2024, 2, 14), chrono::TimeDelta::zero()),
-            (date(2024, 2, 15), chrono::TimeDelta::zero()),
-            (date(2024, 2, 16), chrono::TimeDelta::zero()),
-            (date(2024, 2, 17), chrono::TimeDelta::hours(2)),
-        ];
-        assert_eq!(expected, report);
+        let report = Report::by_date(&log, Fill::Padded);
+        assert_eq!(
+            Report {
+                title: "By date".to_owned(),
+                entries: Some(vec![
+                    (date(2024, 2, 13).to_string(), chrono::TimeDelta::hours(3)),
+                    (date(2024, 2, 14).to_string(), chrono::TimeDelta::zero()),
+                    (date(2024, 2, 15).to_string(), chrono::TimeDelta::zero()),
+                    (date(2024, 2, 16).to_string(), chrono::TimeDelta::zero()),
+                    (date(2024, 2, 17).to_string(), chrono::TimeDelta::hours(2)),
+                ]),
+                total: None
+            },
+            report
+        );
     }
 
     #[test]
     fn by_project_empty() {
-        let list = timelog::Log(vec![]);
-        let report: Vec<_> = by_project(&list);
-        assert!(report.is_empty());
-        let report: Vec<_> = by_project(&list);
-        assert!(report.is_empty());
+        let log = timelog::Log(vec![]);
+        let report = Report::by_project(&log);
+        assert_eq!(
+            Report {
+                title: "By project".to_owned(),
+                entries: Some(vec![]),
+                total: None
+            },
+            report
+        );
+        let report = Report::by_project(&log);
+        assert_eq!(
+            Report {
+                title: "By project".to_owned(),
+                entries: Some(vec![]),
+                total: None
+            },
+            report
+        );
     }
 
     #[test]
     fn by_project_one_project() {
-        let list = timelog::Log::parse(indoc::indoc! {"
+        let log = timelog::Log::parse(indoc::indoc! {"
             ## 2024-02-13
             * 9-10 ABC
             * 10-11 ABC
             ## 2024-02-14
             * 9-10 ABC
         "});
-        let report: Vec<_> = by_project(&list);
-        let expected = vec![("ABC".to_string(), chrono::TimeDelta::hours(3))];
-        assert_eq!(expected, report);
+        let report = Report::by_project(&log);
+        assert_eq!(
+            Report {
+                title: "By project".to_owned(),
+                entries: Some(vec![("ABC".to_string(), chrono::TimeDelta::hours(3))]),
+                total: None
+            },
+            report
+        );
     }
 
     #[test]
     fn by_project_multiple_projects() {
-        let list = timelog::Log::parse(indoc::indoc! {"
+        let log = timelog::Log::parse(indoc::indoc! {"
             ## 2024-02-13
             * 9-10 ABC
             * 10-11 DEF
             ## 2024-02-14
             * 9-10 ABC
         "});
-        let report: Vec<_> = by_project(&list);
-        let expected = vec![
-            ("ABC".to_string(), chrono::TimeDelta::hours(2)),
-            ("DEF".to_string(), chrono::TimeDelta::hours(1)),
-        ];
-        assert_eq!(expected, report);
+        let report = Report::by_project(&log);
+        assert_eq!(
+            Report {
+                title: "By project".to_owned(),
+                entries: Some(vec![
+                    ("ABC".to_string(), chrono::TimeDelta::hours(2)),
+                    ("DEF".to_string(), chrono::TimeDelta::hours(1)),
+                ]),
+                total: None
+            },
+            report
+        );
+    }
+
+    #[test]
+    fn total() {
+        let log = timelog::Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            * 9-10 ABC
+            * 10-11 DEF
+            ## 2024-02-14
+            * 9-10 ABC
+        "});
+        let report = Report::total(&log);
+        assert_eq!(
+            Report {
+                title: "Total".to_owned(),
+                entries: None,
+                total: Some(chrono::TimeDelta::hours(3))
+            },
+            report
+        );
+    }
+
+    #[test]
+    fn fmt_as_text_emtpy() {
+        let report = Report {
+            title: "By project".to_owned(),
+            entries: None,
+            total: None,
+        };
+        let result = format!("{}", report.text());
+        let expected = indoc::indoc! {"
+            \u{1b}[1mBy project\u{1b}[0m
+        "};
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn fmt_as_text_with_entries() {
+        let report = Report {
+            title: "By project".to_owned(),
+            entries: Some(vec![
+                ("ABC".to_string(), chrono::TimeDelta::hours(2)),
+                ("DEF".to_string(), chrono::TimeDelta::hours(1)),
+            ]),
+            total: None,
+        };
+        let result = format!("{}", report.text());
+        let expected = indoc::indoc! {"
+            \u{1b}[1mBy project\u{1b}[0m
+            ABC: 2
+            DEF: 1
+        "};
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn fmt_as_text_with_total() {
+        let report = Report {
+            title: "Total".to_owned(),
+            entries: None,
+            total: Some(chrono::TimeDelta::hours(3)),
+        };
+        let result = format!("{}", report.text());
+        let expected = indoc::indoc! {"
+            \u{1b}[1mTotal\u{1b}[0m: 3
+        "};
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn fmt_as_text_with_entries_and_total() {
+        let report = Report {
+            title: "By project".to_owned(),
+            entries: Some(vec![
+                ("ABC".to_string(), chrono::TimeDelta::hours(2)),
+                ("DEF".to_string(), chrono::TimeDelta::hours(1)),
+            ]),
+            total: Some(chrono::TimeDelta::hours(3)),
+        };
+        let result = format!("{}", report.text());
+        let expected = indoc::indoc! {"
+            \u{1b}[1mBy project\u{1b}[0m: 3
+            ABC: 2
+            DEF: 1
+        "};
+        assert_eq!(expected, result);
     }
 }

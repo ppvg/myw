@@ -1,4 +1,7 @@
-use myw::{report, timelog::Log};
+use myw::{
+    report::{Fill, Report},
+    timelog::Log,
+};
 use std::{fs, path::PathBuf};
 
 fn main() {
@@ -13,7 +16,7 @@ fn bench_report_by_date_short(bencher: divan::Bencher) {
     let log = Log::parse(&content);
 
     bencher.bench_local(move || {
-        report::by_date(&log, report::Fill::Padded);
+        Report::by_date(&log, Fill::Padded);
     });
 }
 
@@ -25,7 +28,7 @@ fn bench_report_by_date_long(bencher: divan::Bencher) {
     let log = Log::parse(&content);
 
     bencher.bench_local(move || {
-        report::by_date(&log, report::Fill::Padded);
+        Report::by_date(&log, Fill::Padded);
     });
 }
 
@@ -37,6 +40,6 @@ fn bench_report_by_date_scrambled(bencher: divan::Bencher) {
     let log = Log::parse(&content);
 
     bencher.bench_local(move || {
-        report::by_date(&log, report::Fill::Padded);
+        Report::by_date(&log, Fill::Padded);
     });
 }
