@@ -101,8 +101,210 @@ mod tests {
         chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap()
     }
 
+    fn datetime(y: i32, m: u32, d: u32, hours: u32, minutes: u32) -> chrono::NaiveDateTime {
+        let date = chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        let time = chrono::NaiveTime::from_hms_opt(hours, minutes, 0).unwrap();
+        chrono::NaiveDateTime::new(date, time)
+    }
+
     fn map<T: Hash + Eq, U>(vec: Vec<(T, U)>) -> IndexMap<T, U> {
         vec.into_iter().collect::<IndexMap<T, U>>()
+    }
+
+    #[test]
+    fn parse_empty_file() {
+        let log = Log::parse("");
+        assert!(log.0.is_empty());
+    }
+
+    #[test]
+    fn parse_unrelated_list() {
+        let log = Log::parse(indoc::indoc! {"
+            ## Just some list
+            * A list
+            * But no timelog entries
+        "});
+        assert!(log.0.is_empty());
+    }
+
+    #[test]
+    fn parse_list_empty_items() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            *
+            *
+        "});
+        assert!(log.0.is_empty());
+    }
+
+    #[test]
+    fn parse_no_list() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            Just some notes, no list of timelog entries
+        "});
+        assert!(log.0.is_empty());
+    }
+
+    #[test]
+    fn parse_list_without_entries() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            * A list
+            * But no timelog entries
+        "});
+        assert!(log.0.is_empty());
+    }
+
+    #[test]
+    fn parse_simple_list() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            * 9-10 ABC
+            * 10-11 DEF
+        "});
+        let expected = Log(vec![
+            Entry {
+                from: datetime(2024, 2, 13, 9, 0),
+                until: datetime(2024, 2, 13, 10, 0),
+                project: "ABC".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 13, 10, 0),
+                until: datetime(2024, 2, 13, 11, 0),
+                project: "DEF".into(),
+                notes: None,
+            },
+        ]);
+        assert_eq!(expected, log);
+    }
+
+    #[test]
+    fn parse_unrelated_paragraph_and_simple_list() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            Some unrelated text, followed by list with entries:
+            * 9-10 ABC
+            * 10-11 DEF
+        "});
+        let expected = Log(vec![
+            Entry {
+                from: datetime(2024, 2, 13, 9, 0),
+                until: datetime(2024, 2, 13, 10, 0),
+                project: "ABC".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 13, 10, 0),
+                until: datetime(2024, 2, 13, 11, 0),
+                project: "DEF".into(),
+                notes: None,
+            },
+        ]);
+        assert_eq!(expected, log);
+    }
+
+    #[test]
+    fn parse_mixed_list() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            Some unrelated text, followed by list with entries mixed with notes:
+            * 9-10 ABC
+              * Notes about this entry
+            * Some unrelated list item
+            * 10-11 DEF
+        "});
+        let expected = Log(vec![
+            Entry {
+                from: datetime(2024, 2, 13, 9, 0),
+                until: datetime(2024, 2, 13, 10, 0),
+                project: "ABC".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 13, 10, 0),
+                until: datetime(2024, 2, 13, 11, 0),
+                project: "DEF".into(),
+                notes: None,
+            },
+        ]);
+        assert_eq!(expected, log);
+    }
+
+    #[test]
+    fn parse_multiple_dates_mixed_content() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            Some unrelated text, followed by list with entries mixed with notes:
+            * 9-10 ABC
+              * Notes about this entry
+            * Some unrelated list item
+            * 10-11 DEF
+            ## 2024-02-14
+            * 9-10 ABC
+        "});
+        let expected = Log(vec![
+            Entry {
+                from: datetime(2024, 2, 13, 9, 0),
+                until: datetime(2024, 2, 13, 10, 0),
+                project: "ABC".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 13, 10, 0),
+                until: datetime(2024, 2, 13, 11, 0),
+                project: "DEF".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 14, 9, 0),
+                until: datetime(2024, 2, 14, 10, 0),
+                project: "ABC".into(),
+                notes: None,
+            },
+        ]);
+        assert_eq!(expected, log);
+    }
+
+    #[test]
+    fn parse_multiple_dates_unordered_and_repeating() {
+        let log = Log::parse(indoc::indoc! {"
+            ## 2024-02-13
+            * 9-10 ABC
+            * 10-11 DEF
+            ## 2024-02-14
+            * 9-10 ABC
+            ## 2024-02-13
+            * 11-12 GHI
+        "});
+        let expected = Log(vec![
+            Entry {
+                from: datetime(2024, 2, 13, 9, 0),
+                until: datetime(2024, 2, 13, 10, 0),
+                project: "ABC".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 13, 10, 0),
+                until: datetime(2024, 2, 13, 11, 0),
+                project: "DEF".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 13, 11, 0),
+                until: datetime(2024, 2, 13, 12, 0),
+                project: "GHI".into(),
+                notes: None,
+            },
+            Entry {
+                from: datetime(2024, 2, 14, 9, 0),
+                until: datetime(2024, 2, 14, 10, 0),
+                project: "ABC".into(),
+                notes: None,
+            },
+        ]);
+        assert_eq!(expected, log);
     }
 
     #[test]
